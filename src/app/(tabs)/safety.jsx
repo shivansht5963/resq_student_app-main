@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   Platform,
   ActivityIndicator,
@@ -26,7 +25,7 @@ import { useTheme } from "@/utils/useTheme";
 import ErrorModal from "@/components/ErrorModal";
 import { logoutUser } from "@/utils/api";
 
-export default function HomePage() {
+export default function SafetyPage() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { sendSOSAlert, currentBeacon } = useApp();
@@ -129,7 +128,9 @@ export default function HomePage() {
           flex: 1,
           paddingHorizontal: 20,
           paddingTop: insets.top + 20,
-          paddingBottom: insets.bottom + 20,
+          paddingBottom: insets.bottom + 20, 
+          // Added extra padding at bottom for tab bar clearance if needed, 
+          // though usually Tabs handle this. 
         }}
       >
         {/* Header with Theme Toggle & Logout */}
@@ -150,10 +151,10 @@ export default function HomePage() {
                   marginBottom: 4,
                 }}
               >
-                Welcome Back
+                Safety Center
               </Text>
               <Text style={{ fontSize: 16, color: colors.textSecondary }}>
-                Stay safe on campus
+                Your Campus Shield
               </Text>
             </View>
             <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
@@ -178,24 +179,6 @@ export default function HomePage() {
                 ) : (
                   <Moon size={22} color={colors.primary} />
                 )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleLogout}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: colors.surface,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  shadowColor: colors.primary,
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 4,
-                  elevation: 2,
-                }}
-              >
-                <LogOut size={22} color="#EF4444" />
               </TouchableOpacity>
             </View>
           </View>
@@ -245,14 +228,14 @@ export default function HomePage() {
           style={{
             alignItems: "center",
             justifyContent: "center",
-            marginVertical: 30,
+            marginVertical: 20,
           }}
         >
           <SOSButton onSOSTrigger={handleSOSTrigger} />
         </View>
 
         {/* Feature Cards - Reorganized Layout */}
-        <View style={{ marginTop: 20 }}>
+        <View style={{ marginTop: 10 }}>
           {/* Top Row: My Incidents and Chat */}
           <View
             style={{

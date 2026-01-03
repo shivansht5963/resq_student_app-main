@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 
-export const authKey = `${process.env.EXPO_PUBLIC_PROJECT_GROUP_ID}-jwt`;
+// Use same key as api.js to ensure consistency
+export const authKey = 'resq_auth_token';
+export const erpAuthKey = 'erp_auth_token';
 
 /**
  * This store manages the authentication state of the application.
@@ -9,14 +11,25 @@ export const authKey = `${process.env.EXPO_PUBLIC_PROJECT_GROUP_ID}-jwt`;
 export const useAuthStore = create((set) => ({
   isReady: false,
   auth: null,
+  erpAuth: null,
+  user: null, // User profile object
   setAuth: (auth) => {
     if (auth) {
-      SecureStore.setItemAsync(authKey, JSON.stringify(auth));
+      SecureStore.setItemAsync(authKey, auth);
     } else {
       SecureStore.deleteItemAsync(authKey);
     }
     set({ auth });
   },
+  setErpAuth: (token) => {
+    if (token) {
+      SecureStore.setItemAsync(erpAuthKey, token);
+    } else {
+      SecureStore.deleteItemAsync(erpAuthKey);
+    }
+    set({ erpAuth: token });
+  },
+  setUser: (user) => set({ user }),
 }));
 
 /**

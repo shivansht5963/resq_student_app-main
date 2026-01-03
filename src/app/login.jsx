@@ -70,23 +70,36 @@ export default function LoginScreen() {
     try {
       const response = await loginUser(email, password);
       console.log('Login response:', response);
-      
-      // Token should be automatically stored by loginUser
+
+      // ResQ (Critical) Check
       if (response && response.auth_token) {
+        // ERP (Optional) Check
+        if (response.erp_auth === 'FAILED') {
+          console.log("⚠️ Logged in to ResQ backend");
+          console.log("❌ ERP login failed – Academics disabled");
+          // Optionally show a toast or alert here for the user
+          // For now, reliance on console log as per instructions, but UI feedback is good practice.
+          // We can add a specialized error modal or just proceed.
+          // Proceeding to home as ResQ is successful.
+        } else {
+          console.log("✅ Logged in to ResQ backend");
+          console.log("✅ Logged in to ERP backend");
+        }
+
         console.log('Token stored successfully, navigating to home');
-        // Navigate to home
-        router.replace("/home");
+        router.replace("/(tabs)/home");
       } else {
         console.error('No token in response:', response);
         throw new Error("No token received from server");
       }
     } catch (err) {
       console.error("Login error:", err);
+      // If ResQ login fails, we are here.
       setError({
         status: err.status || 500,
         message: err.message || "Login failed. Please try again.",
         type: err.type || "ERROR",
-        detail: err.detail,
+        detail: err.detail || "Authentication Failed",
       });
       setShowErrorModal(true);
     } finally {
