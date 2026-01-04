@@ -1,34 +1,85 @@
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system/legacy';
 
-const BASE_URL = 'https://resq-server.onrender.com/api';
-const AUTH_TOKEN_KEY = 'resq_auth_token';
+const RESQ_BASE_URL = 'https://resq-server.onrender.com/api';
+const ERP_BASE_URL = 'https://erp-9pbn.onrender.com/api/v1';
+
+const RESQ_TOKEN_KEY = 'resq_auth_token';
+const ERP_TOKEN_KEY = 'erp_auth_token';
+
+// Helper for clean logging
+const logApi = (type, url, method, status = '', details = '') => {
+  const timestamp = new Date().toLocaleTimeString();
+  let icon = '🌐';
+  let color = '';
+
+  if (type === 'REQ') { icon = '🚀'; }
+  else if (type === 'OK') { icon = '✅'; }
+  else if (type === 'ERR') { icon = '❌'; }
+
+  // Extract endpoint from full URL for brevity
+  const endpoint = url.replace(RESQ_BASE_URL, '').replace(ERP_BASE_URL, '');
+
+  if (type === 'REQ') {
+    console.log(`${icon} [REQ] ${method} ${endpoint}`);
+  } else {
+    console.log(`${icon} [${type}] ${method} ${endpoint} (${status}) ${details ? JSON.stringify(details) : ''}`);
+  }
+};
 
 /**
- * Get auth token from secure storage
+ * Get ResQ auth token from secure storage
  */
 export const getAuthToken = async () => {
   try {
-    const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+    const token = await SecureStore.getItemAsync(RESQ_TOKEN_KEY);
     return token;
   } catch (error) {
-    console.error('Error retrieving auth token:', error);
+    console.error('Error retrieving ResQ auth token:', error);
     return null;
   }
 };
 
 /**
- * Store auth token securely
+ * Get ERP auth token from secure storage
+ */
+export const getErpToken = async () => {
+  try {
+    const token = await SecureStore.getItemAsync(ERP_TOKEN_KEY);
+    return token;
+  } catch (error) {
+    console.error('Error retrieving ERP auth token:', error);
+    return null;
+  }
+};
+
+/**
+ * Store ResQ auth token securely
  */
 export const setAuthToken = async (token) => {
   try {
     if (token) {
-      await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+      await SecureStore.setItemAsync(RESQ_TOKEN_KEY, token);
     } else {
-      await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+      await SecureStore.deleteItemAsync(RESQ_TOKEN_KEY);
     }
   } catch (error) {
-    console.error('Error storing auth token:', error);
+    console.error('Error storing ResQ auth token:', error);
+  }
+};
+
+/**
+ * Store ERP auth token securely
+ */
+export const setErpToken = async (token) => {
+  try {
+    if (token) {
+      await SecureStore.setItemAsync(ERP_TOKEN_KEY, token);
+    } else {
+      await SecureStore.deleteItemAsync(ERP_TOKEN_KEY);
+    }
+  } catch (error) {
+    console.error('Error storing ERP auth token:', error);
   }
 };
 
@@ -37,7 +88,8 @@ export const setAuthToken = async (token) => {
  */
 const apiRequest = async (endpoint, options = {}) => {
   const token = await getAuthToken();
-  const url = `${BASE_URL}${endpoint}`;
+  const url = `${RESQ_BASE_URL}${endpoint}`;
+  const method = options.method || 'GET';
 
   const headers = {
     'Content-Type': 'application/json',
@@ -48,16 +100,36 @@ const apiRequest = async (endpoint, options = {}) => {
     headers['Authorization'] = `Token ${token}`;
   }
 
+  logApi('REQ', url, method);
+
   try {
     const response = await fetch(url, {
       ...options,
       headers,
     });
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type');
+    let data;
+
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { detail: text };
+      }
+
+      if (!response.ok) {
+        console.log(`[ResQ] Non-JSON response (${response.status}):`, text.substring(0, 200));
+      }
+    }
 
     if (!response.ok) {
       // Handle specific error codes
+      logApi('ERR', url, method, response.status, data?.detail || 'Error');
+
       if (response.status === 401) {
         // Token invalid, clear it
         await setAuthToken(null);
@@ -105,9 +177,14 @@ const apiRequest = async (endpoint, options = {}) => {
       }
     }
 
+    logApi('OK', url, method, response.status);
     return { success: true, data };
   } catch (error) {
     // Network or parsing errors
+    if (!error.status) {
+      logApi('ERR', url, method, 'NET', error.message);
+    }
+
     if (error.status) {
       // Already formatted error
       throw error;
@@ -132,35 +209,151 @@ const apiRequest = async (endpoint, options = {}) => {
 };
 
 /**
+ * Make authenticated ERP API request
+ */
+export const erpApiRequest = async (endpoint, options = {}) => {
+  const token = await getErpToken();
+  const url = `${ERP_BASE_URL}${endpoint}`;
+  const method = options.method || 'GET';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  if (token) {
+    headers['Authorization'] = `Token ${token}`;
+  }
+
+  logApi('REQ', url, method);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    const contentType = response.headers.get('content-type');
+    let data;
+
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { detail: text }; // Fallback for non-JSON response
+      }
+
+      if (!response.ok) {
+        console.log(`[ERP] Non-JSON response (${response.status}):`, text.substring(0, 200));
+      }
+    }
+
+    if (!response.ok) {
+      logApi('ERR', url, method, response.status, data?.detail || 'Error');
+
+      // Handle specific error codes
+      if (response.status === 401) {
+        // Token invalid, clear it
+        await setErpToken(null);
+        throw {
+          status: 401,
+          message: 'Session expired. Please login again.',
+          type: 'UNAUTHORIZED',
+          detail: data?.detail || 'Invalid token',
+        };
+      } else {
+        throw {
+          status: response.status,
+          message: data?.detail || 'An error occurred',
+          type: 'ERROR',
+          detail: data,
+        };
+      }
+    }
+
+    logApi('OK', url, method, response.status);
+    return { success: true, data };
+  } catch (error) {
+    if (!error.status) {
+      logApi('ERR', url, method, 'NET', error.message);
+    }
+    if (error.status) throw error;
+    throw {
+      status: 0,
+      message: 'Network error. Please check your connection.',
+      type: 'NETWORK_ERROR',
+      detail: error.message || 'No internet connection',
+    };
+  }
+};
+
+/**
  * POST /auth/login/
  * Login with email and password
  */
 export const loginUser = async (email, password) => {
   try {
-    const result = await apiRequest('/auth/login/', {
+    // 1. ResQ Login (CRITICAL)
+    const resqResult = await apiRequest('/auth/login/', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
 
-    // Backend returns { auth_token: "...", user_id: "...", role: "..." } directly in data
-    if (result.success && result.data && result.data.auth_token) {
-      await setAuthToken(result.data.auth_token);
-      return result.data;
-    } else if (!result.data || !result.data.auth_token) {
+    if (resqResult.success && resqResult.data && resqResult.data.auth_token) {
+      await setAuthToken(resqResult.data.auth_token);
+      console.log('✅ Logged in to ResQ backend');
+    } else {
       throw {
         status: 400,
-        message: 'No token received from server',
+        message: 'No ResQ token received',
         type: 'BAD_REQUEST',
-        detail: 'The server did not return a valid token. Please check your credentials.',
       };
     }
-    throw new Error('Invalid login response');
-  } catch (error) {
-    // If error is already formatted with status property, throw it
-    if (error.status) {
-      throw error;
+
+    // 2. ERP Login (OPTIONAL - Graceful Degradation)
+    let erpSuccess = false;
+    let erpUserData = null;
+    try {
+      const erpResult = await erpApiRequest('/auth/login/', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (erpResult.success && erpResult.data && erpResult.data.auth_token) {
+        await setErpToken(erpResult.data.auth_token);
+        console.log('✅ Logged in to ERP backend');
+        erpSuccess = true;
+
+        // Extract user data from response
+        const { auth_token, ...userData } = erpResult.data;
+        erpUserData = userData;
+
+        // Also update local store immediately if possible, but returning it is cleaner
+        const { useAuthStore } = require('./auth/store');
+        useAuthStore.getState().setUser(userData);
+
+      } else {
+        console.warn('⚠️ ERP login response missing token');
+      }
+    } catch (erpError) {
+      console.log('⚠️ Logged in to ResQ backend');
+      console.log('❌ ERP login failed – Academics disabled');
+      await setErpToken(null);
     }
-    // Otherwise format it
+
+    // Return combined result, preserving original structure for compatibility
+    return {
+      ...resqResult.data,
+      erp_auth: erpSuccess ? 'SUCCESS' : 'FAILED',
+      erp_user: erpUserData
+    };
+
+  } catch (error) {
+    // ResQ Failed - Block access
+    if (error.status) throw error;
     throw {
       status: 400,
       message: 'Login failed. Please try again.',
@@ -179,11 +372,14 @@ export const logoutUser = async () => {
     await apiRequest('/auth/logout/', {
       method: 'POST',
     });
+    // Clear BOTH tokens
     await setAuthToken(null);
+    await setErpToken(null);
     return { success: true };
   } catch (error) {
-    // Clear token even if logout fails
+    // Clear tokens even if logout fails
     await setAuthToken(null);
+    await setErpToken(null);
     throw error;
   }
 };
@@ -393,7 +589,7 @@ export const reportIncident = async (reportData) => {
 
     // Get auth token first
     const token = await getAuthToken();
-    const url = `${BASE_URL}/incidents/report/`;
+    const url = `${RESQ_BASE_URL}/incidents/report/`;
 
     // Handle images - Build multipart body manually for React Native compatibility
     // FIX #3: Manual multipart construction - most compatible with React Native
@@ -657,9 +853,199 @@ export const getIncidentEvents = async (incidentId, eventType = null, limit = 50
   }
 };
 
+// ==========================================
+// ERP STUDENT API ENDPOINTS
+// ==========================================
+
+/**
+ * GET /auth/profile/
+ * Get current user profile
+ */
+export const getProfile = async () => {
+  try {
+    const result = await erpApiRequest('/auth/profile/');
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * PUT /auth/profile/
+ * Update user profile
+ */
+export const updateProfile = async (profileData) => {
+  try {
+    const result = await erpApiRequest('/auth/profile/', {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * POST /auth/change-password/
+ * Change user password
+ */
+export const changePassword = async (oldPassword, newPassword, confirmPassword) => {
+  try {
+    const result = await erpApiRequest('/auth/change-password/', {
+      method: 'POST',
+      body: JSON.stringify({
+        old_password: oldPassword,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      }),
+    });
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * GET /students/
+ * List all students (Used to find current student ID by matching user ID)
+ */
+export const getStudents = async () => {
+  try {
+    const result = await erpApiRequest('/students/');
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * GET /students/{id}/
+ * Get specific student details
+ */
+export const getStudentDetails = async (studentId) => {
+  try {
+    const result = await erpApiRequest(`/students/${studentId}/`);
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * GET /students/{id}/attendance/
+ * Get student attendance
+ */
+export const getStudentAttendance = async (studentId) => {
+  try {
+    const result = await erpApiRequest(`/students/${studentId}/attendance/`);
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * GET /students/{id}/marks/
+ * Get student marks
+ */
+export const getStudentMarks = async (studentId) => {
+  try {
+    const result = await erpApiRequest(`/students/${studentId}/marks/`);
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * GET /students/{id}/fees/
+ * Get student fee status
+ */
+export const getStudentFees = async (studentId) => {
+  try {
+    const result = await erpApiRequest(`/students/${studentId}/fees/`);
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * GET /students/{id}/fee-payments/
+ * Get student fee payment history
+ */
+export const getStudentFeeHistory = async (studentId) => {
+  try {
+    const result = await erpApiRequest(`/students/${studentId}/fee-payments/`);
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * GET /notifications/
+ * Get user notifications
+ */
+export const getNotifications = async () => {
+  try {
+    const result = await erpApiRequest('/notifications/');
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * GET /notifications/{id}/
+ * Get notification details
+ */
+export const getNotificationDetails = async (notificationId) => {
+  try {
+    const result = await erpApiRequest(`/notifications/${notificationId}/`);
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * PUT /notifications/{id}/mark_read/
+ * Mark notification as read
+ */
+export const markNotificationRead = async (notificationId) => {
+  try {
+    const result = await erpApiRequest(`/notifications/${notificationId}/mark_read/`, {
+      method: 'PUT',
+    });
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * DELETE /notifications/{id}/
+ * Delete notification
+ */
+export const deleteNotification = async (notificationId) => {
+  try {
+    await erpApiRequest(`/notifications/${notificationId}/`, {
+      method: 'DELETE',
+    });
+    return true;
+  } catch (error) {
+    throw error;
+  }
+};
+
 export default {
   getAuthToken,
+  getErpToken,
   setAuthToken,
+  setErpToken,
+  erpApiRequest,
   loginUser,
   logoutUser,
   getBeacons,
@@ -672,4 +1058,18 @@ export default {
   getIncidentEvents,
   getConversationMessages,
   sendMessage,
+  // ERP Exports
+  getProfile,
+  updateProfile,
+  changePassword,
+  getStudents,
+  getStudentDetails,
+  getStudentAttendance,
+  getStudentMarks,
+  getStudentFees,
+  getStudentFeeHistory,
+  getNotifications,
+  getNotificationDetails,
+  markNotificationRead,
+  deleteNotification,
 };
