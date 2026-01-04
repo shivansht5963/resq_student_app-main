@@ -27,6 +27,6 @@ export default function Index() {
   }
 
   // Redirect to login if no token, otherwise go to home
-  return <Redirect href={token ? "/home" : "/login"} />;
+  return <Redirect href={token ? "/(tabs)/home" : "/login"} />;
 }
 

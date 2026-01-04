@@ -47,7 +47,7 @@ export default function RootLayout() {
             <Stack.Screen name="splash" />
             <Stack.Screen name="login" />
             <Stack.Screen name="login-new" />
-            <Stack.Screen name="home" />
+            <Stack.Screen name="(tabs)" />
             <Stack.Screen name="report" />
             <Stack.Screen name="incidents" />
             <Stack.Screen name="incident-detail" />
